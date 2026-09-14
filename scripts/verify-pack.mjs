@@ -15,9 +15,9 @@ try {
   assert.ok(pack.size < 25000, 'package must stay small');
   writeFileSync(join(temp, 'package.json'), '{"private":true,"type":"module"}');
   run(['install', '--ignore-scripts', '--no-audit', '--no-fund', join(temp, pack.filename)], temp);
-  writeFileSync(join(temp, 'smoke.mjs'), `import { createTelemetry } from '@liushiyumathxjtu/telemetry';\nawait createTelemetry({package:'example',version:'1.0.0'}).success();`);
+  writeFileSync(join(temp, 'smoke.mjs'), `import { createTelemetry } from '@nyn5255/telemetry';\nawait createTelemetry({package:'example',version:'1.0.0'}).success();`);
   execFileSync(process.execPath, ['smoke.mjs'], { cwd: temp, timeout: 3000 });
-  writeFileSync(join(temp, 'smoke.mts'), `import { createTelemetry, type TelemetryEvent } from '@liushiyumathxjtu/telemetry';\nconst c = createTelemetry({package:'example',version:'1.0.0'});\nvoid c.feedback('positive');\n// @ts-expect-error free-form feedback is forbidden\nvoid c.feedback('private prompt');\nconst event: TelemetryEvent['event'] = 'd7_retained';`);
+  writeFileSync(join(temp, 'smoke.mts'), `import { createTelemetry, type TelemetryEvent } from '@nyn5255/telemetry';\nconst c = createTelemetry({package:'example',version:'1.0.0'});\nvoid c.feedback('positive');\n// @ts-expect-error free-form feedback is forbidden\nvoid c.feedback('private prompt');\nconst event: TelemetryEvent['event'] = 'd7_retained';`);
   execFileSync(process.execPath, [resolve('node_modules/typescript/bin/tsc'), '--strict', '--noEmit', '--skipLibCheck', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', join(temp, 'smoke.mts')], { stdio: 'pipe' });
   console.log(JSON.stringify({ name: pack.name, version: pack.version, bytes: pack.size, files, integrity: pack.integrity, installedImport: 'passed', installedTypes: 'passed' }, null, 2));
 } finally { rmSync(temp, { recursive: true, force: true }); }

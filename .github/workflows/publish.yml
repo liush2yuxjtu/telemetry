@@ -1,0 +1,37 @@
+name: Publish npm
+on:
+  release:
+    types: [published]
+permissions:
+  contents: read
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'liush2yuxjtu/telemetry'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+      - name: Check release version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: node -e 'const p = require("./package.json"); if (p.name !== "@nyn5255/telemetry" || process.env.RELEASE_TAG !== "v" + p.version) process.exit(1)'
+      - run: npm install --global npm@11.16.0
+      - run: npm ci
+      - run: npm test
+      - run: npm run verify:pack
+      - name: Publish verified package with OIDC
+        run: |
+          npm pack --json > pack.json
+          TARBALL=$(node -p 'require("./pack.json")[0].filename')
+          npm publish "$TARBALL" --access public --provenance

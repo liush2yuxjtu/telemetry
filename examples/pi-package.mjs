@@ -1,4 +1,4 @@
-import { createTelemetry } from '@liushiyumathxjtu/telemetry';
+import { createTelemetry } from '@nyn5255/telemetry';
 
 // Your UI must show the collector address, fields, and retention policy BEFORE
 // saving explicit consent. A missing preference MUST remain false.
