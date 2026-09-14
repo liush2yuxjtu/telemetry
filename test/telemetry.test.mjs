@@ -7,18 +7,18 @@ import { mkdtemp, readFile, writeFile, readdir, rm, mkdir, stat } from 'node:fs/
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTelemetry } from '../dist/index.js';
-let dir, sent, behavior, oldRequest, oldNow, keepAlive;
+let dir, sent, behavior, oldRequest, oldNow, keepAlive, onSend;
 const originalEnv = { ...process.env };
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'telemetry-test-'));
-  sent = []; behavior = 'ok'; oldRequest = https.request; oldNow = Date.now;
+  sent = []; onSend = undefined; behavior = 'ok'; oldRequest = https.request; oldNow = Date.now;
   for (const k of ['CI','GITHUB_ACTIONS','GITLAB_CI','TF_BUILD','JENKINS_URL','BUILD_ID','DO_NOT_TRACK','PI_TELEMETRY_DISABLED']) delete process.env[k];
   keepAlive = setInterval(() => {}, 1000);
   https.request = (url, options, callback) => {
     if (behavior === 'throw') throw Error('offline');
     const req = new EventEmitter();
     req.destroy = () => { queueMicrotask(() => req.emit('close')); return req; };
-    req.end = body => { sent.push({ url, options, body: JSON.parse(body) }); if (behavior === 'ok') queueMicrotask(callback); };
+    req.end = body => { sent.push({ url, options, body: JSON.parse(body) }); onSend?.(); if (behavior === 'ok') queueMicrotask(callback); };
     return req;
   };
   syncBuiltinESMExports();
@@ -76,7 +76,8 @@ test('failures never reject and once events do not retry', async () => {
 test('wall-clock deadline bounds stalled network and disable cancels requests', async () => {
   behavior = 'stall'; const c = client({ timeoutMs: 50 }); const started = performance.now(); await c.install();
   assert.ok(performance.now() - started < 400);
-  const pending = c.feedback('positive'); setTimeout(() => c.disable(), 10); await pending; await c.success();
+  onSend = () => queueMicrotask(() => c.disable());
+  await c.feedback('positive'); await c.success();
   assert.deepEqual(names(), ['install','feedback']);
 });
 test('runtime environment opt-out and disable suppress queued events', async () => {
