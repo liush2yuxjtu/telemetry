@@ -1,0 +1,55 @@
+{
+  "name": "@liushiyumathxjtu/telemetry",
+  "version": "0.1.0",
+  "description": "Opt-in, privacy-first, zero-runtime-dependency telemetry for Pi and Node.js packages",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "examples"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "author": "Liu Shiyu",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/liush2yuxjtu/telemetry.git"
+  },
+  "bugs": {
+    "url": "https://github.com/liush2yuxjtu/telemetry/issues"
+  },
+  "keywords": [
+    "pi",
+    "telemetry",
+    "privacy",
+    "opt-in",
+    "analytics"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/network.test.mjs test/telemetry.test.mjs",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm test",
+    "verify:pack": "node scripts/verify-pack.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0"
+  }
+}
