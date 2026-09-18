@@ -11,6 +11,7 @@ import { createTelemetry } from '../dist/index.js';
 import { validateEvent, toRow, COLUMNS } from '../collector/schema.mjs';
 import { createHandler, DEFAULT_MAX_BYTES, readBody } from '../collector/handler.mjs';
 import { createMemoryStore, createSqlStore } from '../collector/store.mjs';
+import { createNeonQuery, sqlEndpoint } from '../collector/neon.mjs';
 import { nodeAdapter } from '../collector/adapters/node.mjs';
 import { webAdapter } from '../collector/adapters/web.mjs';
 import { buildReport, parseEvents, renderMarkdown } from '../scripts/funnel.mjs';
@@ -287,5 +288,65 @@ test('collector accepts the payload the shipped SDK actually sends', async () =>
     https.request = original;
     syncBuiltinESMExports();
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('neon adapter targets the https SQL endpoint and keeps the string in a header', async () => {
+  const calls = [];
+  const query = createNeonQuery({
+    connectionString: 'postgresql://user:secret@ep-cool-1.us-east-2.aws.neon.tech/neondb?sslmode=require',
+    fetchImpl: async (url, init) => { calls.push({ url, init }); return { ok: true, json: async () => ({ rows: [{ ok: 1 }] }) }; },
+  });
+  const rows = await query('select $1::text', ['a']);
+  assert.deepEqual(rows, [{ ok: 1 }]);
+  assert.equal(calls[0].url, 'https://ep-cool-1.us-east-2.aws.neon.tech/sql');
+  assert.equal(calls[0].init.headers['neon-connection-string'].includes('secret'), true);
+  assert.equal(calls[0].url.includes('secret'), false);
+  assert.deepEqual(JSON.parse(calls[0].init.body), { query: 'select $1::text', params: ['a'] });
+});
+
+test('neon adapter fails closed without a connection string and leaks no body on error', async () => {
+  const original = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  try {
+    assert.throws(() => createNeonQuery({}), /DATABASE_URL/);
+  } finally {
+    if (original !== undefined) process.env.DATABASE_URL = original;
+  }
+
+  const query = createNeonQuery({
+    connectionString: 'postgres://u:p@host.example/db',
+    fetchImpl: async () => ({ ok: false, status: 500, json: async () => ({ message: 'row violates constraint for 1.2.3.4' }) }),
+  });
+  await assert.rejects(() => query('insert into t values ($1)', ['x']), (error) => {
+    assert.equal(error.message, 'neon http 500');
+    assert.equal(error.message.includes('1.2.3.4'), false);
+    return true;
+  });
+
+  assert.equal(sqlEndpoint('postgres://u:p@host.example:5432/db?sslmode=require'), 'https://host.example:5432/sql');
+  assert.throws(() => sqlEndpoint('https://host.example/db'), /postgres/);
+  assert.throws(() => sqlEndpoint('mysql://u:p@host.example/db'), /postgres/);
+});
+
+test('vercel entry point exists and fails closed when storage is unconfigured', async () => {
+  const original = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  try {
+    const module = await import(`../api/events.mjs?fresh=${Math.random()}`);
+    const respond = module.default;
+    const req = Object.assign(Readable.from([Buffer.from(JSON.stringify(event()))]), { method: 'POST', headers: { 'content-type': 'application/json' } });
+    let status; let body = '';
+    const res = { set statusCode(v) { status = v; }, get statusCode() { return status; }, setHeader() {}, end(chunk) { body = chunk; } };
+    await respond(req, res);
+    assert.equal(status, 500);
+    assert.deepEqual(JSON.parse(body), { error: 'storage_unavailable' });
+
+    const getReq = Object.assign(Readable.from(['']), { method: 'GET', headers: {} });
+    const getRes = { set statusCode(v) { status = v; }, get statusCode() { return status; }, setHeader() {}, end() {} };
+    await respond(getReq, getRes);
+    assert.equal(status, 405);
+  } finally {
+    if (original !== undefined) process.env.DATABASE_URL = original;
   }
 });
