@@ -252,6 +252,9 @@ test('collector accepts the payload the shipped SDK actually sends', async () =>
       endpoint: 'https://collector.example/events',
       collectorPrivacyAcknowledged: true,
       enabled: true,
+      // Deterministic on every host: real CI sets CI=true, where the SDK would
+      // otherwise suppress events and this contract test would capture nothing.
+      allowCI: true,
       stateDirectory: join(dir, 'state'),
       features: ['debug'],
     });
