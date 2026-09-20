@@ -21,6 +21,10 @@
     {
       "src": "api/retention.mjs",
       "use": "@vercel/node"
+    },
+    {
+      "src": "api/grokbot-dispatch.mjs",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
@@ -39,6 +43,10 @@
     {
       "src": "/api/health/?",
       "dest": "api/health.mjs"
+    },
+    {
+      "src": "/api/grokbot-dispatch/?",
+      "dest": "api/grokbot-dispatch.mjs"
     },
     {
       "src": "/(.*)",
