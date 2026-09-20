@@ -24,8 +24,12 @@ export const COUNT_SQL = `select count(*)::int as expired
 from telemetry_events
 where received_at < now() - ($1::int * interval '1 day')`;
 
+// `returning` is what makes the job able to report the truth: Neon's HTTP endpoint
+// answers a bare DELETE with an empty row list, so counting the rows it returns is
+// the only way to tell "deleted 12" from "deleted nothing, and the report lied".
 export const DELETE_SQL = `delete from telemetry_events
-where received_at < now() - ($1::int * interval '1 day')`;
+where received_at < now() - ($1::int * interval '1 day')
+returning event_id`;
 
 /** Count rows past the window. Never deletes. */
 export async function countExpired(query, days = RETENTION_DAYS) {
@@ -34,9 +38,10 @@ export async function countExpired(query, days = RETENTION_DAYS) {
   return Number(value);
 }
 
-/** Delete rows past the window and report how many the database removed. */
+/** Delete rows past the window and report how many the database actually removed. */
 export async function deleteExpired(query, days = RETENTION_DAYS) {
   const rows = await query(DELETE_SQL, [days]);
-  const value = rows?.[0]?.count ?? rows?.[0]?.deleted ?? rows?.length ?? 0;
-  return Number(value) || 0;
+  if (!Array.isArray(rows)) return 0;
+  if (rows.length > 0 && typeof rows[0]?.count === 'number') return Number(rows[0].count);
+  return rows.length;
 }

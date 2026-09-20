@@ -21,17 +21,25 @@ test('retention deletes by the collector clock, never by a client timestamp', ()
   assert.equal(/client_timestamp/.test(DELETE_SQL), false);
 });
 
+test('delete reports what the database returned, not a hopeful zero', () => {
+  assert.match(DELETE_SQL, /returning event_id/);
+});
+
 test('count and delete adapt to whatever the driver returns', async () => {
   const calls = [];
   const query = async (text, params) => {
     calls.push({ text, params });
-    return text.startsWith('select') ? [{ expired: 7 }] : [{ count: 3 }];
+    return text.startsWith('select') ? [{ expired: 7 }] : [{ event_id: 'a' }, { event_id: 'b' }];
   };
   assert.equal(await countExpired(query), 7);
-  assert.equal(await deleteExpired(query), 3);
+  assert.equal(await deleteExpired(query), 2, 'two returned rows means two deleted rows');
   assert.deepEqual(calls[0].params, [180]);
 
-  const odd = async (text) => (text.startsWith('select') ? [] : undefined);
-  assert.equal(await countExpired(odd), 0);
-  assert.equal(await deleteExpired(odd), 0);
+  const empty = async (text) => (text.startsWith('select') ? [] : []);
+  assert.equal(await countExpired(empty), 0);
+  assert.equal(await deleteExpired(empty), 0);
+
+  const broken = async (text) => (text.startsWith('select') ? undefined : undefined);
+  assert.equal(await countExpired(broken), 0);
+  assert.equal(await deleteExpired(broken), 0);
 });
