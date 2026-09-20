@@ -49,6 +49,12 @@ try {
 
 const healthAfter = await readJson(`${base}/api/health`);
 if (!healthAfter.ok) throw new Error(`collector health failed after send: ${healthAfter.status}`);
+const funnelAfter = await readJson(`${base}/api/funnel`);
+if (!funnelAfter.ok) throw new Error(`funnel read failed: ${funnelAfter.status}`);
+const leakedTestRows = Array.isArray(funnelAfter.body?.packages)
+  ? funnelAfter.body.packages.filter(row => String(row?.package || '').startsWith('telemetry-e2e-'))
+  : [];
+if (leakedTestRows.length) throw new Error('CI-tagged E2E events leaked into the real-user funnel');
 
 console.log(JSON.stringify({
   sdk: '@nyn5255/telemetry@0.1.2',
@@ -61,5 +67,12 @@ console.log(JSON.stringify({
   expected_events: ['install', 'activated', 'first_success', 'weekly_active', 'feedback'],
   health_before: healthBefore,
   health_after: healthAfter,
-  note: 'Event delivery is verified against Vercel request logs after all lanes complete; SDK calls are best-effort by design.'
+  funnel_after: {
+    status: funnelAfter.status,
+    ok: funnelAfter.ok,
+    privacy: funnelAfter.body?.privacy,
+    totals: funnelAfter.body?.totals,
+    e2e_rows_visible: leakedTestRows.length,
+  },
+  note: 'Event delivery is verified against Vercel request logs; CI-tagged E2E rows must remain absent from the real-user funnel.'
 }, null, 2));
