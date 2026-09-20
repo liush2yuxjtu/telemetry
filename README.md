@@ -1,8 +1,8 @@
 # @nyn5255/telemetry
 
-Small, explicitly opt-in telemetry for Pi and Node.js packages. Zero runtime dependencies. Node.js 20+. ESM with generated TypeScript declarations. MIT.
+Small, explicitly opt-in telemetry for Pi and Node.js packages. Zero runtime dependencies. Node.js 18+. ESM with generated TypeScript declarations. MIT.
 
-**Off by default. No collector is configured or deployed by this package.** Importing, constructing, or calling a disabled client performs no filesystem writes or network requests. No npm install hooks are installed.
+**Off by default. The SDK has no implicit endpoint.** This repository operates a reference collector at `https://telemetry-peach.vercel.app/api/events`; health is available at `/api/health` and aggregate-only funnel counts at `/api/funnel`. Importing, constructing, or calling a disabled client performs no filesystem writes or network requests. No npm install hooks are installed.
 
 ## Install and integrate
 
@@ -17,7 +17,7 @@ const telemetry = createTelemetry({
   package: 'pi-debug-mode', // static public package metadata
   version: '0.1.8',
   enabled: preferences.telemetryConsent === true, // no implicit consent
-  endpoint: 'https://YOUR-COLLECTOR.example/events',
+  endpoint: 'https://telemetry-peach.vercel.app/api/events',
   collectorPrivacyAcknowledged: true, // only after operator verification below
   features: ['debug'],
 });
@@ -115,7 +115,7 @@ For first publication, authenticate on the publishing machine to an account auth
 npm login --registry=https://registry.npmjs.org/
 npm whoami --registry=https://registry.npmjs.org/
 npm publish --access public
-npm view @nyn5255/telemetry@0.1.0 version dist.integrity --registry=https://registry.npmjs.org/
+npm view @nyn5255/telemetry@0.1.1 version dist.integrity --registry=https://registry.npmjs.org/
 ```
 
 Publishing may require npm's interactive two-factor challenge. Never commit `.npmrc` or paste a token into issues/chat. No credential is included in this package.

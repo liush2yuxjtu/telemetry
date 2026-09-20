@@ -1,11 +1,9 @@
-# Funnel collector (draft, not deployed)
+# Funnel collector
 
 Receives schema-v1 events from `@nyn5255/telemetry`, stores them as pseudonymous
 rows, and feeds the funnel report in `scripts/funnel.mjs`.
 
-Status: **code complete and tested locally, no collector is deployed and no
-package points at one.** Nothing in this directory is published to npm: the
-package `files` list ships only `dist`, `README.md`, `LICENSE`, and `examples`.
+Status: **deployed to production at `https://telemetry-peach.vercel.app`.** Events are accepted at `/api/events`, database health is exposed at `/api/health`, and `/api/funnel` returns aggregate-only package/version counts with no event IDs or anonymous install IDs. Nothing in this directory is published to npm: the package `files` list ships only `dist`, `README.md`, `LICENSE`, and `examples`.
 
 ## What the funnel measures
 
