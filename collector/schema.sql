@@ -55,3 +55,19 @@ group by package, version;
 -- received_at, the collector's own clock, so a client-supplied timestamp cannot
 -- extend a row's life. Manual equivalent of one run:
 -- delete from telemetry_events where received_at < now() - interval '180 days';
+
+-- Explicit, user-initiated debug feedback. Unlike aggregate telemetry, this may
+-- contain redacted transcript content. It therefore lives in a separate table,
+-- has a 30-day retention window, and is never surfaced by /api/funnel.
+create table if not exists debug_feedback (
+  feedback_id       uuid primary key,
+  schema_version    integer     not null,
+  package           text        not null,
+  version           text        not null,
+  client_timestamp  timestamptz not null,
+  feedback          text        not null,
+  files             jsonb       not null,
+  redaction         jsonb       not null,
+  received_at       timestamptz not null default now()
+);
+create index if not exists debug_feedback_received_at on debug_feedback(received_at);

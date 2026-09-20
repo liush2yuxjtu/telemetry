@@ -119,3 +119,16 @@ contract test that feeds the real payload of the shipped SDK into the collector.
 - Public consent copy per package, and which packages go first.
 - Whether the collector code stays in this public repository (auditable) or moves
   to a private one (deployment details stay private).
+
+
+## Explicit debug feedback
+
+`POST /api/feedback` is deliberately separate from the aggregate funnel. It is
+used only after an explicit `/debug-feedback` confirmation in `pi-debug-mode`.
+Text feedback may be sent alone. Transcript attachments are accepted only when
+the client declares a TruffleHog scan and supplies bounded gzip-compressed
+redacted JSONL files. Raw transcripts are never required by the API.
+
+Feedback lives in the separate `debug_feedback` table, is not exposed by
+`/api/funnel`, and the existing daily `/api/retention` job deletes it after
+30 days. The ordinary aggregate telemetry window remains 180 days.

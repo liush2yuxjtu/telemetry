@@ -43,3 +43,17 @@ test('count and delete adapt to whatever the driver returns', async () => {
   assert.equal(await countExpired(broken), 0);
   assert.equal(await deleteExpired(broken), 0);
 });
+
+test('feedback retention is 30 days and only targets debug_feedback', async () => {
+  const mod = await import('../collector/retention.mjs');
+  assert.equal(mod.FEEDBACK_RETENTION_DAYS, 30);
+  const calls = [];
+  const query = async (sql, params) => {
+    calls.push({ sql, params });
+    return [{ feedback_id: 'a' }, { feedback_id: 'b' }];
+  };
+  assert.equal(await mod.deleteExpiredFeedback(query), 2);
+  const deletion = calls.find((call) => /delete from debug_feedback/.test(call.sql));
+  assert.ok(deletion);
+  assert.deepEqual(deletion.params, [30]);
+});

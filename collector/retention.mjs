@@ -1,3 +1,4 @@
+import { ensureFeedbackSchema } from "./feedback-store.mjs";
 /**
  * Retention enforcement.
  *
@@ -11,6 +12,7 @@
  */
 
 export const RETENTION_DAYS = 180;
+export const FEEDBACK_RETENTION_DAYS = 30;
 
 /** Cutoff timestamp for a retention window, computed from the injected clock. */
 export function retentionCutoff(days = RETENTION_DAYS, now = new Date()) {
@@ -41,6 +43,29 @@ export async function countExpired(query, days = RETENTION_DAYS) {
 /** Delete rows past the window and report how many the database actually removed. */
 export async function deleteExpired(query, days = RETENTION_DAYS) {
   const rows = await query(DELETE_SQL, [days]);
+  if (!Array.isArray(rows)) return 0;
+  if (rows.length > 0 && typeof rows[0]?.count === 'number') return Number(rows[0].count);
+  return rows.length;
+}
+
+
+export const COUNT_FEEDBACK_SQL = `select count(*)::int as expired
+from debug_feedback
+where received_at < now() - ($1::int * interval '1 day')`;
+
+export const DELETE_FEEDBACK_SQL = `delete from debug_feedback
+where received_at < now() - ($1::int * interval '1 day')
+returning feedback_id`;
+
+export async function countExpiredFeedback(query, days = FEEDBACK_RETENTION_DAYS) {
+  await ensureFeedbackSchema(query);
+  const rows = await query(COUNT_FEEDBACK_SQL, [days]);
+  return Number(rows?.[0]?.expired ?? rows?.[0]?.count ?? 0);
+}
+
+export async function deleteExpiredFeedback(query, days = FEEDBACK_RETENTION_DAYS) {
+  await ensureFeedbackSchema(query);
+  const rows = await query(DELETE_FEEDBACK_SQL, [days]);
   if (!Array.isArray(rows)) return 0;
   if (rows.length > 0 && typeof rows[0]?.count === 'number') return Number(rows[0].count);
   return rows.length;

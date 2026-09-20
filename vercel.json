@@ -25,6 +25,10 @@
     {
       "src": "api/grokbot-dispatch.mjs",
       "use": "@vercel/node"
+    },
+    {
+      "src": "api/feedback.mjs",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
@@ -47,6 +51,10 @@
     {
       "src": "/api/grokbot-dispatch/?",
       "dest": "api/grokbot-dispatch.mjs"
+    },
+    {
+      "src": "/api/feedback/?",
+      "dest": "api/feedback.mjs"
     },
     {
       "src": "/(.*)",
