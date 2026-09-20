@@ -35,11 +35,17 @@ const telemetry = createTelemetry({
   allowCI: true,
 });
 
-await telemetry.install();
-await telemetry.activated('smoke');
-await telemetry.success('smoke');
-await telemetry.feedback('positive', 'smoke');
-await telemetry.flush();
+// The SDK deliberately unrefs sockets/timers so telemetry never keeps a CLI alive.
+const keepAlive = setInterval(() => {}, 100);
+try {
+  await telemetry.install();
+  await telemetry.activated('smoke');
+  await telemetry.success('smoke');
+  await telemetry.feedback('positive', 'smoke');
+  await telemetry.flush();
+} finally {
+  clearInterval(keepAlive);
+}
 
 const healthAfter = await readJson(`${base}/api/health`);
 if (!healthAfter.ok) throw new Error(`collector health failed after send: ${healthAfter.status}`);
