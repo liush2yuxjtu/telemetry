@@ -2,3 +2,5 @@ node_modules/
 *.tgz
 .npmrc
 .DS_Store
+.vercel
+.env*

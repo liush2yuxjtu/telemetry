@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "builds": [
+    { "src": "api/events.mjs", "use": "@vercel/node" },
+    { "src": "api/funnel.mjs", "use": "@vercel/node" },
+    { "src": "api/health.mjs", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/funnel/?", "dest": "api/funnel.mjs" },
+    { "src": "/api/health/?", "dest": "api/health.mjs" },
+    { "src": "/(.*)", "dest": "api/events.mjs" }
+  ]
+}
