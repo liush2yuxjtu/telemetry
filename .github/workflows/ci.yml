@@ -26,9 +26,9 @@ jobs:
           E2E_CLIENT: ${{ matrix.os }}
           COLLECTOR_URL: https://telemetry-peach.vercel.app
         run: |
-          rm -rf .e2e-consumer
-          mkdir .e2e-consumer
-          cd .e2e-consumer
+          rm -rf e2e-consumer
+          mkdir e2e-consumer
+          cd e2e-consumer
           npm init -y >/dev/null
           npm install --ignore-scripts --no-audit --no-fund @nyn5255/telemetry@0.1.2
           cp ../scripts/prod-e2e-live.mjs ./prod-e2e-live.mjs
