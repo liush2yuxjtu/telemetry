@@ -64,6 +64,8 @@ function supportsNativeProxyAgent(): boolean {
   return major >= 25 || (major === 24 && minor >= 5) || (major === 22 && minor >= 21);
 }
 const optedOut = () => ['DO_NOT_TRACK', 'PI_TELEMETRY_DISABLED'].some(k => !!process.env[k] && !['0', 'false'].includes(process.env[k]!.toLowerCase()));
+/** Print exactly what would be sent, send nothing, and leave local state untouched. */
+const debugMode = () => !!process.env.PI_TELEMETRY_DEBUG && !['0', 'false'].includes(process.env.PI_TELEMETRY_DEBUG.toLowerCase());
 /** UTC Monday date identifies the natural week, including ISO year boundaries. */
 function weekOf(time: number): string {
   const d = new Date(time);
@@ -176,6 +178,12 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
       if ((kind === 'active' || kind === 'success') && (state.week === null || week > state.week)) { state.week = week; add('weekly_active'); }
       if (kind === 'feedback') add('feedback');
       if (!events.length || !allowed()) return;
+      if (debugMode()) {
+        // Deliberately before the state write: inspecting what would be sent must not
+        // consume a once-event, so the real run later still sends it.
+        for (const pending of events) process.stderr.write(`[telemetry:debug] ${JSON.stringify(pending)}\n`);
+        return;
+      }
       temporary = file + '.' + randomUUID() + '.tmp';
       await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: 'wx' });
       await rename(temporary, file);

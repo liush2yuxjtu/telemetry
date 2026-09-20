@@ -2,11 +2,17 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { request } from 'node:https';
+import { Agent, request } from 'node:https';
 const DAY = 86_400_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const isCI = () => ['CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'TF_BUILD', 'JENKINS_URL', 'BUILD_ID'].some(k => !!process.env[k] && !['0', 'false'].includes(process.env[k].toLowerCase()));
+function supportsNativeProxyAgent() {
+    const [major = 0, minor = 0] = process.versions.node.split('.').map(Number);
+    return major >= 25 || (major === 24 && minor >= 5) || (major === 22 && minor >= 21);
+}
 const optedOut = () => ['DO_NOT_TRACK', 'PI_TELEMETRY_DISABLED'].some(k => !!process.env[k] && !['0', 'false'].includes(process.env[k].toLowerCase()));
+/** Print exactly what would be sent, send nothing, and leave local state untouched. */
+const debugMode = () => !!process.env.PI_TELEMETRY_DEBUG && !['0', 'false'].includes(process.env.PI_TELEMETRY_DEBUG.toLowerCase());
 /** UTC Monday date identifies the natural week, including ISO year boundaries. */
 function weekOf(time) {
     const d = new Date(time);
@@ -29,6 +35,7 @@ export function createTelemetry(options) {
     let version = '';
     let allowCI = false;
     let features = new Set();
+    let agent = false;
     let queue = Promise.resolve();
     let pending = 0;
     const requests = new Set();
@@ -50,6 +57,9 @@ export function createTelemetry(options) {
         file = join(directory, createHash('sha256').update(packageName).digest('hex') + '.json');
         timeout = Number.isFinite(options.timeoutMs) ? Math.min(1000, Math.max(50, options.timeoutMs)) : 500;
         allowCI = options.allowCI === true;
+        const hasProxyEnv = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'NO_PROXY', 'no_proxy'].some(k => !!process.env[k]);
+        if (hasProxyEnv && supportsNativeProxyAgent())
+            agent = new Agent({ proxyEnv: process.env });
         enabled = options.enabled === true && options.collectorPrivacyAcknowledged === true;
     }
     catch { /* Invalid configuration disables telemetry, never the host program. */ }
@@ -74,7 +84,7 @@ export function createTelemetry(options) {
             };
             try {
                 const body = JSON.stringify(event);
-                req = request(endpoint, { method: 'POST', agent: false, headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } }, finish);
+                req = request(endpoint, { method: 'POST', agent, headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } }, finish);
                 requests.add(req);
                 req.on('error', finish);
                 req.on('close', finish);
@@ -154,6 +164,13 @@ export function createTelemetry(options) {
                 add('feedback');
             if (!events.length || !allowed())
                 return;
+            if (debugMode()) {
+                // Deliberately before the state write: inspecting what would be sent must not
+                // consume a once-event, so the real run later still sends it.
+                for (const pending of events)
+                    process.stderr.write(`[telemetry:debug] ${JSON.stringify(pending)}\n`);
+                return;
+            }
             temporary = file + '.' + randomUUID() + '.tmp';
             await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: 'wx' });
             await rename(temporary, file);

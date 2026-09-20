@@ -4,7 +4,7 @@ import { Readable } from 'node:stream';
 import { EventEmitter } from 'node:events';
 import https from 'node:https';
 import { syncBuiltinESMExports } from 'node:module';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTelemetry } from '../dist/index.js';
@@ -369,5 +369,59 @@ test('vercel entry point exists and fails closed when storage is unconfigured', 
     assert.equal(status, 405);
   } finally {
     if (original !== undefined) process.env.DATABASE_URL = original;
+  }
+});
+
+test('PI_TELEMETRY_DEBUG prints the payload, sends nothing, and consumes no once-event', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'telemetry-debug-'));
+  const stateDir = join(dir, 'state');
+  const captured = [];
+  const network = [];
+  const originalRequest = https.request;
+  const originalWrite = process.stderr.write;
+  https.request = ((url, options, callback) => {
+    network.push(url);
+    const req = new EventEmitter();
+    req.destroy = () => { queueMicrotask(() => req.emit('close')); return req; };
+    req.end = () => queueMicrotask(callback);
+    return req;
+  });
+  syncBuiltinESMExports();
+  process.stderr.write = ((chunk, ...rest) => {
+    captured.push(String(chunk));
+    return originalWrite.call(process.stderr, chunk, ...rest);
+  });
+  process.env.PI_TELEMETRY_DEBUG = '1';
+  try {
+    const client = createTelemetry({
+      package: 'pi-debug-mode',
+      version: '0.1.8',
+      endpoint: 'https://collector.example/events',
+      collectorPrivacyAcknowledged: true,
+      enabled: true,
+      allowCI: true,
+      stateDirectory: stateDir,
+      features: ['debug'],
+    });
+    await client.install();
+    await client.activated('debug');
+    await client.flush();
+
+    const printed = captured.filter((line) => line.startsWith('[telemetry:debug] '));
+    assert.equal(printed.length, 2, 'each pending event is printed once');
+    const payloads = printed.map((line) => JSON.parse(line.replace('[telemetry:debug] ', '')));
+    assert.deepEqual(payloads.map((p) => p.event), ['install', 'activated']);
+    for (const payload of payloads) assert.equal(validateEvent(payload).ok, true);
+    assert.deepEqual(network, [], 'debug mode must not touch the network');
+
+    // Sending is disabled, but so is state: the events are still owed to the collector.
+    const stateFiles = await readdir(stateDir).catch(() => []);
+    assert.deepEqual(stateFiles.filter((name) => name.endsWith('.json')), [], 'no state written in debug mode');
+  } finally {
+    https.request = originalRequest;
+    syncBuiltinESMExports();
+    process.stderr.write = originalWrite;
+    delete process.env.PI_TELEMETRY_DEBUG;
+    await rm(dir, { recursive: true, force: true });
   }
 });
