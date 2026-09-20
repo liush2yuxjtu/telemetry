@@ -49,6 +49,9 @@ from telemetry_events
 where ci = false
 group by package, version;
 
--- Retention job: pseudonymous rows are deleted after the published window.
--- Run daily; the window is a product decision recorded in the collector README.
+-- Retention: pseudonymous rows are deleted after the published window by
+-- api/retention.mjs, which runs daily from a Vercel Cron (0 2 * * *). The window
+-- is 180 days (collector/retention.mjs, RETENTION_DAYS) and is enforced against
+-- received_at, the collector's own clock, so a client-supplied timestamp cannot
+-- extend a row's life. Manual equivalent of one run:
 -- delete from telemetry_events where received_at < now() - interval '180 days';

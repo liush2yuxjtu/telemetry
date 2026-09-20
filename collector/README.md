@@ -77,6 +77,16 @@ export default nodeAdapter(createHandler({ store: createSqlStore(query) }));
 
 Apply `collector/schema.sql` to the database before the first request.
 
+## Daily jobs
+
+| Cron (UTC) | Endpoint | Job |
+| --- | --- | --- |
+| `0 1 * * *` | `/api/digest` | Aggregate the last 30 days, push the digest to `DIGEST_WEBHOOK_URL`; `?dry=1` verifies without messaging |
+| `0 2 * * *` | `/api/retention` | Delete pseudonymous rows older than 180 days; `?dry=1` counts first |
+
+Both honor `CRON_SECRET` when it is set, which Vercel Cron sends automatically.
+Neither logs a payload or a connection string.
+
 ## Running the funnel report
 
 ```sh
@@ -102,8 +112,10 @@ contract test that feeds the real payload of the shipped SDK into the collector.
 
 ## Open decisions
 
-- Collector host and store (see table above).
-- Retention window for pseudonymous rows; the SQL comment proposes 180 days.
+- Collector host and store: Vercel Functions + Neon, live (see table above).
+- Retention window: 180 days, enforced daily by `api/retention.mjs`
+  (`0 2 * * *`). `GET /api/retention?dry=1` counts what would be deleted without
+  deleting it.
 - Public consent copy per package, and which packages go first.
 - Whether the collector code stays in this public repository (auditable) or moves
   to a private one (deployment details stay private).
