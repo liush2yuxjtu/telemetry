@@ -43,7 +43,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test test/network.test.mjs test/telemetry.test.mjs test/collector.test.mjs",
+    "test": "npm run build && node --test test/network.test.mjs test/telemetry.test.mjs test/collector.test.mjs test/digest.test.mjs",
     "funnel": "node scripts/funnel.mjs",
     "prepack": "npm run build",
     "prepublishOnly": "npm test",

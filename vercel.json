@@ -3,12 +3,17 @@
   "version": 2,
   "builds": [
     { "src": "api/events.mjs", "use": "@vercel/node" },
+    { "src": "api/digest.mjs", "use": "@vercel/node" },
     { "src": "api/funnel.mjs", "use": "@vercel/node" },
     { "src": "api/health.mjs", "use": "@vercel/node" }
   ],
   "routes": [
+    { "src": "/api/digest/?", "dest": "api/digest.mjs" },
     { "src": "/api/funnel/?", "dest": "api/funnel.mjs" },
     { "src": "/api/health/?", "dest": "api/health.mjs" },
     { "src": "/(.*)", "dest": "api/events.mjs" }
+  ],
+  "crons": [
+    { "path": "/api/digest", "schedule": "0 1 * * *" }
   ]
 }
