@@ -8,7 +8,7 @@
  */
 
 import { createNeonQuery } from '../collector/neon.mjs';
-import { RETENTION_DAYS, countExpired, deleteExpired } from '../collector/retention.mjs';
+import { RETENTION_DAYS, FEEDBACK_RETENTION_DAYS, countExpired, deleteExpired, countExpiredFeedback, deleteExpiredFeedback } from '../collector/retention.mjs';
 
 export default async function handler(req, res) {
   const url = new URL(req.url ?? '/', `https://${req.headers.host ?? 'localhost'}`);
@@ -35,12 +35,14 @@ export default async function handler(req, res) {
   try {
     if (dry) {
       const expired = await countExpired(query, RETENTION_DAYS);
+      const feedbackExpired = await countExpiredFeedback(query, FEEDBACK_RETENTION_DAYS);
       res.statusCode = 200;
-      return res.end(JSON.stringify({ dryRun: true, retentionDays: RETENTION_DAYS, expired }));
+      return res.end(JSON.stringify({ dryRun: true, retentionDays: RETENTION_DAYS, expired, feedbackRetentionDays: FEEDBACK_RETENTION_DAYS, feedbackExpired }));
     }
     const deleted = await deleteExpired(query, RETENTION_DAYS);
+    const feedbackDeleted = await deleteExpiredFeedback(query, FEEDBACK_RETENTION_DAYS);
     res.statusCode = 200;
-    return res.end(JSON.stringify({ dryRun: false, retentionDays: RETENTION_DAYS, deleted }));
+    return res.end(JSON.stringify({ dryRun: false, retentionDays: RETENTION_DAYS, deleted, feedbackRetentionDays: FEEDBACK_RETENTION_DAYS, feedbackDeleted }));
   } catch {
     // Status only: the connection string must never reach a log line.
     res.statusCode = 500;
