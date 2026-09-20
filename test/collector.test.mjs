@@ -15,6 +15,7 @@ import { createNeonQuery, sqlEndpoint } from '../collector/neon.mjs';
 import { nodeAdapter } from '../collector/adapters/node.mjs';
 import { webAdapter } from '../collector/adapters/web.mjs';
 import { buildReport, parseEvents, renderMarkdown } from '../scripts/funnel.mjs';
+import { buildAggregateSnapshot } from '../collector/report.mjs';
 
 let seq = 0;
 const uuid = (n) => {
@@ -327,6 +328,26 @@ test('neon adapter fails closed without a connection string and leaks no body on
   assert.equal(sqlEndpoint('postgres://u:p@host.example:5432/db?sslmode=require'), 'https://host.example:5432/sql');
   assert.throws(() => sqlEndpoint('https://host.example/db'), /postgres/);
   assert.throws(() => sqlEndpoint('mysql://u:p@host.example/db'), /postgres/);
+});
+
+test('aggregate snapshot exposes counts and rates but no install identifiers', async () => {
+  const query = async (sql, params) => {
+    assert.match(sql, /count\(distinct anonymous_install_id\)/);
+    assert.deepEqual(params, []);
+    return [{
+      package: 'pi-debug-mode', version: '0.1.9', distinct_installs: '3',
+      installs: '3', activated: '2', first_success: '1', d7_retained: '0',
+      weekly_active: '2', feedback_positive: '1', feedback_neutral: '0', feedback_negative: '0',
+    }];
+  };
+  const snapshot = await buildAggregateSnapshot(query);
+  assert.equal(snapshot.privacy, 'aggregate_only_no_identifiers');
+  assert.equal(snapshot.packages[0].distinct_installs, 3);
+  assert.equal(snapshot.packages[0].conversion.install_to_activated, 2 / 3);
+  assert.equal(snapshot.packages[0].conversion.activated_to_first_success, 1 / 2);
+  assert.equal(snapshot.totals.installs, 3);
+  assert.equal(JSON.stringify(snapshot).includes('anonymous_install_id'), false);
+  assert.equal(JSON.stringify(snapshot).includes('event_id'), false);
 });
 
 test('vercel entry point exists and fails closed when storage is unconfigured', async () => {
