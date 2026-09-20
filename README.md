@@ -39,7 +39,7 @@ telemetry.disable();
 
 See [examples/pi-package.mjs](examples/pi-package.mjs). The host owns consent UI and persistence. Display the collector address, exact fields, purpose, and data retention policy before asking. Defaults and missing preferences must stay false. Neither an environment variable nor a package installation silently opts anyone in.
 
-`DO_NOT_TRACK=1` or `PI_TELEMETRY_DISABLED=1` overrides consent. Other nonempty values except `0` and `false` also disable. These switches are checked on every call and before transmission. CI is skipped unless `allowCI: true`; the event only includes a boolean, never CI identifiers or URLs.
+`DO_NOT_TRACK=1` or `PI_TELEMETRY_DISABLED=1` overrides consent. `PI_TELEMETRY_DEBUG=1` prints exactly what would be sent on stderr, sends nothing, and leaves local state untouched, so a later real run still delivers the event. Other nonempty values except `0` and `false` also disable. These switches are checked on every call and before transmission. CI is skipped unless `allowCI: true`; the event only includes a boolean, never CI identifiers or URLs.
 
 ## Funnel and event definitions
 
