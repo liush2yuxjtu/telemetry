@@ -1,6 +1,6 @@
 {
   "name": "@nyn5255/telemetry",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Opt-in, privacy-first, zero-runtime-dependency telemetry for Pi and Node.js packages",
   "type": "module",
   "main": "./dist/index.js",
