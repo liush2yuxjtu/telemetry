@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - verify/install-source-snapshot-20260921
+  pull_request:
+    branches:
+      - main
 permissions:
   contents: read
 jobs:
