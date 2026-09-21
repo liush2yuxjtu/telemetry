@@ -15,6 +15,10 @@
       "use": "@vercel/node"
     },
     {
+      "src": "api/sources.mjs",
+      "use": "@vercel/node"
+    },
+    {
       "src": "api/health.mjs",
       "use": "@vercel/node"
     },
@@ -43,6 +47,10 @@
     {
       "src": "/api/funnel/?",
       "dest": "api/funnel.mjs"
+    },
+    {
+      "src": "/api/sources/?",
+      "dest": "api/sources.mjs"
     },
     {
       "src": "/api/health/?",
