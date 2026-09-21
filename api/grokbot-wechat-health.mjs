@@ -1,6 +1,9 @@
 const TARGETS = [
   'https://grokbot.tail6a877d.ts.net/wechat-mcp/healthz',
   'https://grokbot.tail6a877d.ts.net/wechat-mcp/mcp',
+  'https://grokbot.tail6a877d.ts.net/wechat-mcp/.well-known/oauth-protected-resource',
+  'https://grokbot.tail6a877d.ts.net/.well-known/oauth-protected-resource/wechat-mcp/mcp',
+  'https://grokbot.tail6a877d.ts.net/.well-known/oauth-authorization-server',
   'https://grokbot.tail6a877d.ts.net/healthz',
 ];
 
@@ -25,7 +28,7 @@ async function probe(url) {
       status: r.status,
       location: r.headers.get('location'),
       contentType: r.headers.get('content-type'),
-      body: body.slice(0, 500),
+      body: body.slice(0, 3000),
     };
   } catch (error) {
     return { url, ok: false, error: error?.name || 'fetch_error', message: String(error?.message || error) };
@@ -38,9 +41,5 @@ export default async function handler(req, res) {
     return json(res, 405, { ok: false, error: 'method_not_allowed' });
   }
   const results = await Promise.all(TARGETS.map(probe));
-  return json(res, 200, {
-    ok: true,
-    checkedAt: new Date().toISOString(),
-    results,
-  });
+  return json(res, 200, { ok: true, checkedAt: new Date().toISOString(), results });
 }
