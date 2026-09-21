@@ -7,6 +7,7 @@ export default async function handler(req, res) {
     res.setHeader('allow', 'GET');
     res.setHeader('content-type', 'application/json');
     res.setHeader('cache-control', 'no-store');
+    res.setHeader('access-control-allow-origin', '*');
     return res.end(JSON.stringify({ error: 'method_not_allowed' }));
   }
   try {
@@ -14,11 +15,13 @@ export default async function handler(req, res) {
     res.statusCode = 200;
     res.setHeader('content-type', 'application/json');
     res.setHeader('cache-control', 'no-store');
+    res.setHeader('access-control-allow-origin', '*');
     res.end(JSON.stringify(snapshot));
   } catch {
     res.statusCode = 503;
     res.setHeader('content-type', 'application/json');
     res.setHeader('cache-control', 'no-store');
+    res.setHeader('access-control-allow-origin', '*');
     res.end(JSON.stringify({ error: 'analytics_unavailable' }));
   }
 }
