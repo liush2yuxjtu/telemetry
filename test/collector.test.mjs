@@ -16,6 +16,7 @@ import { nodeAdapter } from '../collector/adapters/node.mjs';
 import { webAdapter } from '../collector/adapters/web.mjs';
 import { buildReport, parseEvents, renderMarkdown } from '../scripts/funnel.mjs';
 import { buildAggregateSnapshot } from '../collector/report.mjs';
+import { buildSourceSnapshot } from '../collector/source-report.mjs';
 
 let seq = 0;
 const uuid = (n) => {
@@ -424,4 +425,25 @@ test('PI_TELEMETRY_DEBUG prints the payload, sends nothing, and consumes no once
     delete process.env.PI_TELEMETRY_DEBUG;
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+
+test('source snapshot groups installs by OS, Node major, package and cohort version without identifiers', async () => {
+  const query = async (sql, params) => {
+    assert.match(sql, /group by os, node_major, package, cohort_version/);
+    assert.equal(params.length, 1);
+    return [
+      { os: 'darwin', node_major: 24, package: 'pi-debug-mode', version: '0.1.11', installs: '3', activated: '2', first_success: '1', d7_eligible: '0', d7_retained: '0', weekly_active: '2' },
+      { os: 'linux', node_major: 22, package: 'pi-debug-mode', version: '0.1.11', installs: '1', activated: '1', first_success: '1', d7_eligible: '0', d7_retained: '0', weekly_active: '1' },
+      { os: 'darwin', node_major: 24, package: 'pi-design-mode', version: '0.3.2', installs: '2', activated: '1', first_success: '0', d7_eligible: '0', d7_retained: '0', weekly_active: '1' },
+    ];
+  };
+  const snapshot = await buildSourceSnapshot(query, { now: '2026-09-21T00:00:00.000Z' });
+  assert.equal(snapshot.privacy, 'aggregate_only_no_identifiers');
+  assert.equal(snapshot.totals.installs, 6);
+  assert.deepEqual(snapshot.os.map(row => [row.os, row.installs]), [['darwin', 5], ['linux', 1]]);
+  assert.deepEqual(snapshot.node_major.map(row => [row.node_major, row.installs]), [[24, 5], [22, 1]]);
+  assert.equal(snapshot.rows[0].conversion.install_to_activated, 2 / 3);
+  assert.equal(JSON.stringify(snapshot).includes('anonymous_install_id'), false);
+  assert.equal(JSON.stringify(snapshot).includes('event_id'), false);
 });
