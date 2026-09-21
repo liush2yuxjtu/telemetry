@@ -1,0 +1,21 @@
+name: Source snapshot
+on:
+  push:
+    branches:
+      - verify/install-source-snapshot-20260921
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read production install sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== SOURCES ==='
+          curl --fail --silent --show-error --max-time 20 https://telemetry-peach.vercel.app/api/sources
+          echo
+          echo '=== FUNNEL ==='
+          curl --fail --silent --show-error --max-time 20 https://telemetry-peach.vercel.app/api/funnel
+          echo
