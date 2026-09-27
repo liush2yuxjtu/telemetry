@@ -4,12 +4,16 @@
  * No event ids or anonymous installation ids leave this module.
  */
 
+import { excludedInstallsSql, internalInstallIds, keepInstallSql, parseAudience, pgTextArray } from './audience.mjs';
+
 const SQL = `
-with filtered as (
+with ${excludedInstallsSql(2, 3)},
+filtered as (
   select *
-  from telemetry_events
+  from telemetry_events t
   where ci = false
     and package <> 'telemetry-smoke'
+    and ${keepInstallSql('t')}
 ),
 cohorts as (
   select distinct on (anonymous_install_id, package)
@@ -105,13 +109,16 @@ function aggregate(rows, keyFn) {
 
 /**
  * @param {(text: string, params: unknown[]) => Promise<unknown[]>} query
- * @param {{now?: Date|string|number}} options
+ * @param {{audience?: string, internalIds?: string[], now?: Date|string|number}} options
  */
 export async function buildSourceSnapshot(query, options = {}) {
   const now = options.now instanceof Date ? options.now : new Date(options.now ?? Date.now());
   if (!Number.isFinite(now.getTime())) throw new Error('invalid analytics clock');
 
-  const raw = await query(SQL, [now.toISOString()]);
+  const audience = parseAudience(options.audience);
+  const internalIds = pgTextArray(options.internalIds ?? internalInstallIds());
+
+  const raw = await query(SQL, [now.toISOString(), audience, internalIds]);
   const rows = (Array.isArray(raw) ? raw : []).map(row => {
     const installs = n(row.installs);
     const activated = n(row.activated);
@@ -158,6 +165,7 @@ export async function buildSourceSnapshot(query, options = {}) {
     generated_at: now.toISOString(),
     privacy: 'aggregate_only_no_identifiers',
     cohorting: 'first_install_version_and_install_device',
+    audience,
     totals: {
       installs: totalInstalls,
       activated: rows.reduce((sum, row) => sum + row.activated, 0),
