@@ -8,7 +8,9 @@ import { buildAggregateSnapshot } from '../collector/report.mjs';
 import { buildSourceSnapshot } from '../collector/source-report.mjs';
 
 const url = process.env.TEST_PG_URL;
-const psql = sql => execFileSync('psql', [url, '-v', 'ON_ERROR_STOP=1', '-qAt'], { input: sql, encoding: 'utf8' });
+// Everything runs inside a throwaway schema, so existing tables at TEST_PG_URL are never touched.
+const SCHEMA = `audience_test_${process.pid}_${Date.now()}`;
+const psql = sql => execFileSync('psql', [url, '-v', 'ON_ERROR_STOP=1', '-qAt'], { input: `set search_path to ${SCHEMA};\n${sql}`, encoding: 'utf8' });
 
 const literal = value => {
   if (value === null || value === undefined) return 'NULL';
@@ -44,6 +46,10 @@ const EVENTS = [
   row(3, 'install', '0.1.12', 'win32', 22, '2026-09-23T10:00:00Z'),
   row(4, 'install', '0.1.12', 'win32', 24, '2026-09-23T10:03:00Z'),
   row(5, 'install', '0.1.12', 'win32', 26, '2026-09-23T10:06:00Z'),
+  // three runtimes, but spread over 28 minutes: no 15-minute window holds all three
+  row(17, 'install', '0.1.12', 'linux', 22, '2026-09-24T20:00:00Z'),
+  row(18, 'install', '0.1.12', 'darwin', 24, '2026-09-24T20:14:00Z'),
+  row(19, 'install', '0.1.12', 'win32', 24, '2026-09-24T20:28:00Z'),
   // spread-out installs: kept
   row(6, 'install', '0.1.12', 'linux', 24, '2026-09-21T01:00:00Z'),
   row(6, 'activated', '0.1.12', 'linux', 24, '2026-09-21T01:10:00Z'),
@@ -64,31 +70,35 @@ const EVENTS = [
 const now = '2026-09-27T06:00:00Z';
 const internalIds = [id(1), id(2)];
 
-test('audience filter on real Postgres', { skip: !url && 'TEST_PG_URL not set' }, async () => {
-  psql(`drop table if exists telemetry_events cascade; drop table if exists debug_feedback cascade;\n${readFileSync(new URL('../collector/schema.sql', import.meta.url), 'utf8')}`);
+test('audience filter on real Postgres', { skip: !url && 'TEST_PG_URL not set' }, async t => {
+  execFileSync('psql', [url, '-v', 'ON_ERROR_STOP=1', '-qc', `create schema ${SCHEMA}`]);
+  t.after(() => execFileSync('psql', [url, '-qc', `drop schema if exists ${SCHEMA} cascade`]));
+  psql(readFileSync(new URL('../collector/schema.sql', import.meta.url), 'utf8'));
   const cols = Object.keys(EVENTS[0]);
   psql(`insert into telemetry_events (${cols.join(',')}) values ${EVENTS.map(e => `(${cols.map(c => literal(e[c])).join(',')})`).join(',\n')};`);
 
   const all = await buildAggregateSnapshot(query, { now, internalIds });
-  assert.deepEqual([all.totals.installs, all.totals.activated, all.totals.first_success], [14, 4, 2]);
+  assert.deepEqual([all.totals.installs, all.totals.activated, all.totals.first_success], [17, 4, 2]);
   assert.equal(all.filters.audience, 'all');
   assert.equal(all.diagnostics.audience_excluded_installs, null);
 
   const human = await buildAggregateSnapshot(query, { now, internalIds, audience: 'likely_human' });
-  assert.deepEqual([human.totals.installs, human.totals.activated, human.totals.first_success], [9, 2, 0]);
+  assert.deepEqual([human.totals.installs, human.totals.activated, human.totals.first_success], [12, 2, 0]);
   assert.deepEqual(human.diagnostics.audience_excluded_installs, { matrix_burst: 3, internal: 2 });
   assert.equal(JSON.stringify(human).includes(id(1)), false);
 
   const noIds = await buildAggregateSnapshot(query, { now, internalIds: [], audience: 'likely_human' });
-  assert.equal(noIds.totals.installs, 11);
+  assert.equal(noIds.totals.installs, 14);
 
   const scoped = await buildAggregateSnapshot(query, { now, internalIds, audience: 'likely_human', packageName: 'pi-debug-mode', version: '0.1.12' });
-  assert.deepEqual([scoped.totals.installs, scoped.totals.activated], [8, 2]);
+  assert.deepEqual([scoped.totals.installs, scoped.totals.activated], [11, 2]);
+  // internal installs are 0.1.11 cohorts, so a 0.1.12-scoped response must not count them
+  assert.deepEqual(scoped.diagnostics.audience_excluded_installs, { matrix_burst: 3, internal: 0 });
 
   const sources = await buildSourceSnapshot(query, { now, internalIds, audience: 'likely_human' });
-  assert.equal(sources.totals.installs, 9);
-  assert.equal(sources.os.find(o => o.os === 'win32'), undefined);
+  assert.equal(sources.totals.installs, 12);
+  assert.equal(sources.os.find(o => o.os === 'win32').installs, 1);
   assert.equal(sources.audience, 'likely_human');
   const sourcesAll = await buildSourceSnapshot(query, { now, internalIds });
-  assert.equal(sourcesAll.totals.installs, 14);
+  assert.equal(sourcesAll.totals.installs, 17);
 });

@@ -155,12 +155,24 @@ from scoped e
 `;
 
 const EXCLUSION_SQL = `
-with ${excludedInstallsSql(3, 4)}
-select count(distinct (package, anonymous_install_id)) filter (where reason = 'matrix_burst')::bigint as matrix_burst,
-       count(distinct (package, anonymous_install_id)) filter (where reason = 'internal')::bigint as internal
-from excluded_installs
-where ($1::text is null or package = $1::text)
-  and ($2::boolean = true or package <> 'telemetry-smoke')
+with ${excludedInstallsSql(4, 5)},
+cohorts as (
+  select distinct on (anonymous_install_id, package)
+         anonymous_install_id, package, version as cohort_version
+  from telemetry_events
+  where ci = false
+    and event = 'install'
+  order by anonymous_install_id, package, client_timestamp, received_at, event_id
+)
+select count(distinct (x.package, x.anonymous_install_id)) filter (where x.reason = 'matrix_burst')::bigint as matrix_burst,
+       count(distinct (x.package, x.anonymous_install_id)) filter (where x.reason = 'internal')::bigint as internal
+from excluded_installs x
+join cohorts c
+  on c.anonymous_install_id = x.anonymous_install_id
+ and c.package = x.package
+where ($1::text is null or x.package = $1::text)
+  and ($2::text is null or c.cohort_version = $2::text)
+  and ($3::boolean = true or x.package <> 'telemetry-smoke')
 `;
 
 const n = value => Number(value ?? 0);
@@ -183,7 +195,7 @@ export async function buildAggregateSnapshot(query, options = {}) {
   const rows = await query(SQL, [packageName, version, includeTest, now.toISOString(), audience, internalIds]);
   const diagnosticRows = await query(DIAGNOSTICS_SQL, [packageName, includeTest]);
   const diagnostic = Array.isArray(diagnosticRows) && diagnosticRows[0] ? diagnosticRows[0] : {};
-  const exclusionRows = audience === 'all' ? [] : await query(EXCLUSION_SQL, [packageName, includeTest, audience, internalIds]);
+  const exclusionRows = audience === 'all' ? [] : await query(EXCLUSION_SQL, [packageName, version, includeTest, audience, internalIds]);
   const exclusion = Array.isArray(exclusionRows) && exclusionRows[0] ? exclusionRows[0] : {};
 
   const packages = (Array.isArray(rows) ? rows : []).map(row => {

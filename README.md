@@ -63,7 +63,7 @@ Use `install → activated → first_success → d7_retained` as the cohort funn
 | Reason | Rule |
 | --- | --- |
 | `internal` | Install id listed in the collector env `INTERNAL_INSTALL_IDS` (comma or whitespace separated UUIDs): the owner's own machines and agents. |
-| `matrix_burst` | First `install` arrived (collector clock) within 15 minutes of ≥ 3 installs of the same package version spanning ≥ 3 distinct OS + Node major combinations. One person does not install one version on three runtimes within minutes; a test matrix does. |
+| `matrix_burst` | Member of a window of at most 15 minutes (earliest to latest first `install`, collector clock) holding ≥ 3 installs of the same package version across ≥ 3 distinct OS + Node major combinations. One person does not install one version on three runtimes within minutes; a test matrix does. |
 
 The funnel reports `filters.audience` and `diagnostics.audience_excluded_installs` counts; sources report `audience`. Install ids never leave the database. Each machine's install id is the `id` field of the SDK state file: `$XDG_CONFIG_HOME` (default `~/.config`), or `%LOCALAPPDATA%` on Windows, then `liushiyumathxjtu-telemetry/<sha256(package name)>.json`.
 

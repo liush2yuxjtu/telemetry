@@ -7,10 +7,10 @@
  *
  * - internal: install ids the owner registered in INTERNAL_INSTALL_IDS (their own
  *   machines and agents). The id lives in the SDK state file on that machine.
- * - matrix_burst: installs whose first `install` event arrived within
- *   BURST_WINDOW_MINUTES of at least BURST_MIN_INSTALLS installs of the same
- *   package version spanning BURST_MIN_ENVIRONMENTS distinct OS + Node major
- *   combinations. One person does not install the same version on three
+ * - matrix_burst: members of any window of at most BURST_WINDOW_MINUTES
+ *   (earliest to latest first `install`) holding at least BURST_MIN_INSTALLS
+ *   installs of the same package version across BURST_MIN_ENVIRONMENTS
+ *   distinct OS + Node major combinations. One person does not install the same version on three
  *   different runtimes within minutes; a test matrix does.
  *
  * The filter runs server-side on the collector's own clock (`received_at`) and
@@ -61,17 +61,24 @@ first_installs as (
     and ${audience} = 'likely_human'
   order by anonymous_install_id, package, received_at, event_id
 ),
-burst_installs as (
-  select f.anonymous_install_id, f.package
-  from first_installs f
+burst_windows as (
+  select a.package, a.version, a.received_at as start_at
+  from first_installs a
   join first_installs g
-    on g.package = f.package
-   and g.version = f.version
-   and g.received_at between f.received_at - interval '${BURST_WINDOW_MINUTES} minutes'
-                         and f.received_at + interval '${BURST_WINDOW_MINUTES} minutes'
-  group by f.anonymous_install_id, f.package
+    on g.package = a.package
+   and g.version = a.version
+   and g.received_at between a.received_at and a.received_at + interval '${BURST_WINDOW_MINUTES} minutes'
+  group by a.anonymous_install_id, a.package, a.version, a.received_at
   having count(distinct g.anonymous_install_id) >= ${BURST_MIN_INSTALLS}
      and count(distinct (g.os, g.node_major)) >= ${BURST_MIN_ENVIRONMENTS}
+),
+burst_installs as (
+  select distinct g.anonymous_install_id, g.package
+  from burst_windows w
+  join first_installs g
+    on g.package = w.package
+   and g.version = w.version
+   and g.received_at between w.start_at and w.start_at + interval '${BURST_WINDOW_MINUTES} minutes'
 ),
 excluded_installs as (
   select anonymous_install_id, package, 'matrix_burst'::text as reason
