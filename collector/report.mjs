@@ -7,13 +7,17 @@
  * This guarantees monotonic stage counts and prevents >100% conversions.
  */
 
+import { excludedInstallsSql, internalInstallIds, keepInstallSql, parseAudience, pgTextArray } from './audience.mjs';
+
 const SQL = `
-with filtered as (
+with ${excludedInstallsSql(5, 6)},
+filtered as (
   select *
-  from telemetry_events
+  from telemetry_events t
   where ci = false
     and ($1::text is null or package = $1::text)
     and ($3::boolean = true or package <> 'telemetry-smoke')
+    and ${keepInstallSql('t')}
 ),
 cohorts as (
   select distinct on (anonymous_install_id, package)
@@ -150,12 +154,33 @@ select
 from scoped e
 `;
 
+const EXCLUSION_SQL = `
+with ${excludedInstallsSql(4, 5)},
+cohorts as (
+  select distinct on (anonymous_install_id, package)
+         anonymous_install_id, package, version as cohort_version
+  from telemetry_events
+  where ci = false
+    and event = 'install'
+  order by anonymous_install_id, package, client_timestamp, received_at, event_id
+)
+select count(distinct (x.package, x.anonymous_install_id)) filter (where x.reason = 'matrix_burst')::bigint as matrix_burst,
+       count(distinct (x.package, x.anonymous_install_id)) filter (where x.reason = 'internal')::bigint as internal
+from excluded_installs x
+join cohorts c
+  on c.anonymous_install_id = x.anonymous_install_id
+ and c.package = x.package
+where ($1::text is null or x.package = $1::text)
+  and ($2::text is null or c.cohort_version = $2::text)
+  and ($3::boolean = true or x.package <> 'telemetry-smoke')
+`;
+
 const n = value => Number(value ?? 0);
 const rate = (num, den) => den > 0 ? num / den : null;
 
 /**
  * @param {(text: string, params: unknown[]) => Promise<unknown[]>} query
- * @param {{packageName?: string|null, version?: string|null, includeTest?: boolean, now?: Date|string|number}} options
+ * @param {{packageName?: string|null, version?: string|null, includeTest?: boolean, audience?: string, internalIds?: string[], now?: Date|string|number}} options
  */
 export async function buildAggregateSnapshot(query, options = {}) {
   const packageName = options.packageName ?? null;
@@ -164,9 +189,14 @@ export async function buildAggregateSnapshot(query, options = {}) {
   const now = options.now instanceof Date ? options.now : new Date(options.now ?? Date.now());
   if (!Number.isFinite(now.getTime())) throw new Error('invalid analytics clock');
 
-  const rows = await query(SQL, [packageName, version, includeTest, now.toISOString()]);
+  const audience = parseAudience(options.audience);
+  const internalIds = pgTextArray(options.internalIds ?? internalInstallIds());
+
+  const rows = await query(SQL, [packageName, version, includeTest, now.toISOString(), audience, internalIds]);
   const diagnosticRows = await query(DIAGNOSTICS_SQL, [packageName, includeTest]);
   const diagnostic = Array.isArray(diagnosticRows) && diagnosticRows[0] ? diagnosticRows[0] : {};
+  const exclusionRows = audience === 'all' ? [] : await query(EXCLUSION_SQL, [packageName, version, includeTest, audience, internalIds]);
+  const exclusion = Array.isArray(exclusionRows) && exclusionRows[0] ? exclusionRows[0] : {};
 
   const packages = (Array.isArray(rows) ? rows : []).map(row => {
     const installs = n(row.installs);
@@ -206,12 +236,17 @@ export async function buildAggregateSnapshot(query, options = {}) {
       package: packageName,
       version,
       include_test: includeTest,
+      audience,
     },
     packages,
     diagnostics: {
       orphan_activated: n(diagnostic.orphan_activated),
       orphan_first_success: n(diagnostic.orphan_first_success),
       test_events_excluded: n(diagnostic.test_events_excluded),
+      audience_excluded_installs: audience === 'all' ? null : {
+        matrix_burst: n(exclusion.matrix_burst),
+        internal: n(exclusion.internal),
+      },
     },
     totals: {
       distinct_package_versions: packages.length,

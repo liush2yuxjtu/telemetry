@@ -333,8 +333,8 @@ test('neon adapter fails closed without a connection string and leaks no body on
 
 test('aggregate snapshot exposes counts and rates but no install identifiers', async () => {
   const query = async (sql, params) => {
-    assert.match(sql, /count\(distinct anonymous_install_id\)/);
-    assert.deepEqual(params, []);
+    if (sql.includes('orphan_activated')) return [{}];
+    assert.match(sql, /distinct on \(anonymous_install_id, package\)/);
     return [{
       package: 'pi-debug-mode', version: '0.1.9', distinct_installs: '3',
       installs: '3', activated: '2', first_success: '1', d7_retained: '0',
@@ -431,14 +431,14 @@ test('PI_TELEMETRY_DEBUG prints the payload, sends nothing, and consumes no once
 test('source snapshot groups installs by OS, Node major, package and cohort version without identifiers', async () => {
   const query = async (sql, params) => {
     assert.match(sql, /group by os, node_major, package, cohort_version/);
-    assert.equal(params.length, 1);
+    assert.deepEqual(params, ['2026-09-21T00:00:00.000Z', 'all', '{}']);
     return [
       { os: 'darwin', node_major: 24, package: 'pi-debug-mode', version: '0.1.11', installs: '3', activated: '2', first_success: '1', d7_eligible: '0', d7_retained: '0', weekly_active: '2' },
       { os: 'linux', node_major: 22, package: 'pi-debug-mode', version: '0.1.11', installs: '1', activated: '1', first_success: '1', d7_eligible: '0', d7_retained: '0', weekly_active: '1' },
       { os: 'darwin', node_major: 24, package: 'pi-design-mode', version: '0.3.2', installs: '2', activated: '1', first_success: '0', d7_eligible: '0', d7_retained: '0', weekly_active: '1' },
     ];
   };
-  const snapshot = await buildSourceSnapshot(query, { now: '2026-09-21T00:00:00.000Z' });
+  const snapshot = await buildSourceSnapshot(query, { now: '2026-09-21T00:00:00.000Z', internalIds: [] });
   assert.equal(snapshot.privacy, 'aggregate_only_no_identifiers');
   assert.equal(snapshot.totals.installs, 6);
   assert.deepEqual(snapshot.os.map(row => [row.os, row.installs]), [['darwin', 5], ['linux', 1]]);

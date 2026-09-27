@@ -18,7 +18,12 @@ beforeEach(async () => {
     if (behavior === 'throw') throw Error('offline');
     const req = new EventEmitter();
     req.destroy = () => { queueMicrotask(() => req.emit('close')); return req; };
-    req.end = body => {\n      sent.push({ url, options, body: JSON.parse(body) });\n      onSend?.();\n      if (behavior === 'ok') queueMicrotask(() => callback({ statusCode: 202, resume() {} }));\n      if (behavior === 'http500') queueMicrotask(() => callback({ statusCode: 500, resume() {} }));\n    };
+    req.end = body => {
+      sent.push({ url, options, body: JSON.parse(body) });
+      onSend?.();
+      if (behavior === 'ok') queueMicrotask(() => callback({ statusCode: 202, resume() {} }));
+      if (behavior === 'http500') queueMicrotask(() => callback({ statusCode: 500, resume() {} }));
+    };
     return req;
   };
   syncBuiltinESMExports();
@@ -70,15 +75,17 @@ test('no arbitrary properties, paths, text, query credentials or undeclared feat
   assert.deepEqual(Object.keys(sent[0].body).sort(), ['schema_version','event','event_id','anonymous_install_id','package','version','timestamp','os','node_major','ci','feature','feedback'].sort());
   assert.deepEqual(Object.keys(sent[0].options.headers).sort(), ['content-length','content-type']);
 });
-test('failures never reject and once events do not retry', async () => {
-  behavior = 'throw'; await client().install(); behavior = 'ok'; await client().install(); assert.equal(sent.length, 0);
+test('failures never reject and a failed once event is resent exactly once from the outbox', async () => {
+  behavior = 'throw'; await client().install(); behavior = 'ok'; await client().install(); await client().install();
+  assert.deepEqual(names(), ['install']);
 });
 test('wall-clock deadline bounds stalled network and disable cancels requests', async () => {
   behavior = 'stall'; const c = client({ timeoutMs: 50 }); const started = performance.now(); await c.install();
   assert.ok(performance.now() - started < 400);
   onSend = () => queueMicrotask(() => c.disable());
   await c.feedback('positive'); await c.success();
-  assert.ok(names().filter(x => x === 'install').length >= 1);\n  assert.ok(names().includes('feedback'));
+  assert.ok(names().filter(x => x === 'install').length >= 1);
+  assert.ok(names().includes('feedback'));
 });
 test('runtime environment opt-out and disable suppress queued events', async () => {
   const c = client(); c.disable(); await c.install(); process.env.DO_NOT_TRACK = '1'; await client().success(); assert.equal(sent.length, 0);

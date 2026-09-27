@@ -38,7 +38,7 @@ test('aggregate funnel is cohort-shaped, D7 uses only eligible first-success ins
 
   assert.equal(snapshot.schema_version, 2);
   assert.equal(snapshot.cohorting, 'first_install_version');
-  assert.deepEqual(calls[0].params, ['pi-debug-mode', '0.1.12', false, now.toISOString()]);
+  assert.deepEqual(calls[0].params, ['pi-debug-mode', '0.1.12', false, now.toISOString(), 'all', '{}']);
   assert.deepEqual(calls[1].params, ['pi-debug-mode', false]);
   assert.equal(snapshot.packages[0].conversion.install_to_activated, 1 / 3);
   assert.equal(snapshot.packages[0].conversion.activated_to_first_success, 1);
@@ -48,6 +48,7 @@ test('aggregate funnel is cohort-shaped, D7 uses only eligible first-success ins
     orphan_activated: 1,
     orphan_first_success: 2,
     test_events_excluded: 8,
+    audience_excluded_installs: null,
   });
 });
 
@@ -73,13 +74,29 @@ test('D7 conversion cannot use immature first-success cohorts', async () => {
 test('funnel query parser supports package/version filters and keeps test traffic opt-in', () => {
   assert.deepEqual(
     parseFunnelOptions({ url: '/api/funnel?package=pi-subtask&version=1.2.3' }),
-    { packageName: 'pi-subtask', version: '1.2.3', includeTest: false },
+    { packageName: 'pi-subtask', version: '1.2.3', includeTest: false, audience: 'all' },
   );
   assert.deepEqual(
     parseFunnelOptions({ url: '/api/funnel?package=telemetry-smoke&include_test=1' }),
-    { packageName: 'telemetry-smoke', version: null, includeTest: true },
+    { packageName: 'telemetry-smoke', version: null, includeTest: true, audience: 'all' },
   );
   assert.throws(() => parseFunnelOptions({ url: '/api/funnel?package=Bad%20Name' }), /invalid package/);
   assert.throws(() => parseFunnelOptions({ url: '/api/funnel?version=latest' }), /invalid version/);
   assert.throws(() => parseFunnelOptions({ url: '/api/funnel?include_test=yes' }), /invalid include_test/);
+});
+
+test('audience filter parsing and internal install ids', async () => {
+  const { parseAudience, internalInstallIds } = await import('../collector/audience.mjs');
+  const { parseSourceOptions } = await import('../api/sources.mjs');
+  assert.equal(parseAudience(null), 'all');
+  assert.equal(parseAudience('likely_human'), 'likely_human');
+  assert.throws(() => parseAudience('everyone'));
+  assert.equal(parseFunnelOptions({ url: '/api/funnel?audience=likely_human' }).audience, 'likely_human');
+  assert.equal(parseFunnelOptions({ url: '/api/funnel' }).audience, 'all');
+  assert.throws(() => parseFunnelOptions({ url: '/api/funnel?audience=bots' }));
+  assert.deepEqual(parseSourceOptions({ url: '/api/sources?audience=likely_human' }), { audience: 'likely_human' });
+  assert.throws(() => parseSourceOptions({ url: '/api/sources?audience=x' }));
+  const a = '11111111-2222-4333-8444-555555555555';
+  assert.deepEqual(internalInstallIds({ INTERNAL_INSTALL_IDS: ` ${a.toUpperCase()}, not-a-uuid\n${a}` }), [a]);
+  assert.deepEqual(internalInstallIds({}), []);
 });

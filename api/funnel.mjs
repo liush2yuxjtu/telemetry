@@ -1,5 +1,6 @@
 import { createNeonQuery } from '../collector/neon.mjs';
 import { buildAggregateSnapshot } from '../collector/report.mjs';
+import { parseAudience } from '../collector/audience.mjs';
 
 const PACKAGE_RE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 const VERSION_RE = /^\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?$/;
@@ -9,6 +10,7 @@ export function parseFunnelOptions(req) {
   const packageName = url.searchParams.get('package');
   const version = url.searchParams.get('version');
   const includeTestRaw = url.searchParams.get('include_test');
+  const audience = parseAudience(url.searchParams.get('audience'));
 
   if (packageName !== null && (!PACKAGE_RE.test(packageName) || packageName.length > 214)) {
     throw new Error('invalid package filter');
@@ -24,6 +26,7 @@ export function parseFunnelOptions(req) {
     packageName,
     version,
     includeTest: includeTestRaw !== null && ['1', 'true'].includes(includeTestRaw.toLowerCase()),
+    audience,
   };
 }
 
